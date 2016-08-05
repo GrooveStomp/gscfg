@@ -20,8 +20,10 @@ almost-there libraries that might work for you:
   * http://msgpack.org/
   * Not really a good fit for what I want.  I want config files in human-
     readable format, but MessagePack is about converting human-readable JSON-
-    like data into binary form.
-  * Definitely not lightweight or easy to include.
+    like data into binary form. To use this I'd have to read the config file,
+    write it to a MessagePack object in memory, then read from it.
+  * https://github.com/camgunz/cmp looks really lightweight and easy to use.
+  * I may end up just using this.
 
 - Tiny Config File Parser (TCFP)
   * https://sourceforge.net/projects/tcfp/
