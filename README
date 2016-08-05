@@ -1,0 +1,43 @@
+For a side project I wanted to use a really lightweight library for reading
+config files. Preferrably this library would not use dynamic allocations and
+would give me an in-memory structure to interact with.
+
+I never did find something to fully satisfy my needs, but I did find some
+almost-there libraries that might work for you:
+
+- minIni
+  * http://www.compuphase.com/minini.htm
+  * Very small, easy to include in a project and works as you expect.
+    The only downside is that it constantly interacts with the OS for file IO
+    to interact with the config file.
+
+- libyaml
+  * http://pyyaml.org/wiki/LibYAML
+  * I didn't even bother trying to hook this up. The interface does not look
+    intuitive and it's nowhere near as lightweight as minIni.
+
+- MessagePack
+  * http://msgpack.org/
+  * Not really a good fit for what I want.  I want config files in human-
+    readable format, but MessagePack is about converting human-readable JSON-
+    like data into binary form.
+  * Definitely not lightweight or easy to include.
+
+- Tiny Config File Parser (TCFP)
+  * https://sourceforge.net/projects/tcfp/
+  * Small, easy to embed. I actually was using this but struggled to have it
+    actually read data from my config file as expected. Probably user error.
+    It also does dynamic allocations with malloc and is in a very early
+    pre-alpha state.
+
+I may actually go back to MessagePack, but it fails miserably compared to my
+ideal of a single-header drop-in library.
+
+--------------------------------------------------------------------------------
+ Setup
+--------------------------------------------------------------------------------
+
+> cd /path/to/project
+> source env/shell
+> build
+> run
