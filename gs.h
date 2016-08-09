@@ -1,9 +1,13 @@
 /******************************************************************************
  * File: gs.h
  * Created: 2016-07-14
- * Last Updated: 2016-08-08
+ * Last Updated: 2016-08-09
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
+ *-----------------------------------------------------------------------------
+ *
+ * Standard library for personal use. Heavily influenced by Sean Barrett's stb.
+ *
  ******************************************************************************/
 #define GS_VERSION 0.1.0
 
@@ -12,10 +16,10 @@
 #include <string.h> /* memset */
 #include <stdarg.h> /* va_list */
 
-#define ArraySize(Array) (sizeof((Array)) / sizeof((Array)[0]))
+#define GSArraySize(Array) (sizeof((Array)) / sizeof((Array)[0]))
 
 /* Full credit: http://stackoverflow.com/a/400970 */
-#define ArrayForEach(Item, Array) \
+#define GSArrayForEach(Item, Array) \
         for(int Keep##__LINE__ = 1, \
                 Count##__LINE__ = 0, \
                 Index = 0, \
@@ -23,6 +27,9 @@
             Keep##__LINE__ && Count##__LINE__ != Size##__LINE__; \
             Keep##__LINE__ = !Keep##__LINE__, Count##__LINE__++) \
                 for(Item = (Array) + Count##__LINE__; Keep##__LINE__; Keep##__LINE__ = !Keep##__LINE__, Index++)
+
+#define GSMax(A, B) ((A) < (B) ? (B) : (A))
+#define GSMin(A, B) ((A) < (B) ? (A) : (B))
 
 void
 GSAbortWithMessage(char *FormatString, ...)
@@ -179,16 +186,43 @@ GSStringCopy(char *Source, char *Dest, int Max)
         return(true);
 }
 
-char *
-GSStringRemoveLeadingWhitespace(char *String)
+unsigned int /* Returns number of bytes copied. */
+GSStringCopyWithoutSurroundingWhitespace(char *Source, char *Dest, unsigned int MaxLength)
 {
-        while(GSCharIsWhitespace(String[0]))
+        int FirstChar, LastChar;
+        for(FirstChar = 0; GSCharIsWhitespace(Source[FirstChar]); FirstChar++);
+
+        int StringLength = GSMin(MaxLength, GSStringLength(Source));
+        for(LastChar = StringLength - 1; GSCharIsWhitespace(Source[LastChar]); LastChar--);
+
+        for(int D=0, S=FirstChar; S<=LastChar; D++, S++)
         {
-                if(String[0] == '\0') break;
-                String++;
+                Dest[D] = Source[S];
         }
 
-        return(String);
+        int Count = (LastChar - FirstChar + 1);
+
+        return(Count);
+}
+
+unsigned int /* Returns number of bytes copied. */
+GSStringCopyWithoutSurroundingWhitespaceWithNull(char *Source, char *Dest, unsigned int MaxLength)
+{
+        int FirstChar, LastChar;
+        for(FirstChar = 0; GSCharIsWhitespace(Source[FirstChar]); FirstChar++);
+
+        int StringLength = GSMin(MaxLength, GSStringLength(Source));
+        for(LastChar = StringLength - 1; GSCharIsWhitespace(Source[LastChar]); LastChar--);
+
+        for(int I=FirstChar; I<=LastChar; I++)
+        {
+                Dest[I] = Source[I];
+        }
+
+        int Count = (LastChar - FirstChar + 1);
+        Dest[Count] = '\0';
+
+        return(Count);
 }
 
 /******************************************************************************
