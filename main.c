@@ -19,89 +19,8 @@
 
 const int MaxStringLength = 255;
 
-typedef struct buffer
-{
-        char *Start;
-        char *Cursor;
-        size_t Capacity;
-        size_t Length;
-} buffer;
-
 void
-BufferResetCursor(buffer *Buffer)
-{
-        Buffer->Cursor = Buffer->Start;
-}
-
-gs_bool
-BufferIsEOF(buffer *Buffer)
-{
-        int Size = Buffer->Cursor - Buffer->Start;
-        gs_bool Result = Size >= Buffer->Length;
-        return(Result);
-}
-
-buffer *
-BufferSet(buffer *Buffer, char *Start, size_t Length, size_t Capacity)
-{
-        Buffer->Start = Start;
-        Buffer->Cursor = Start;
-        Buffer->Length = Length;
-        Buffer->Capacity = Capacity;
-        return(Buffer);
-}
-
-void
-BufferAdvanceToNextLine(buffer *Buffer)
-{
-        while(true)
-        {
-                if(Buffer->Cursor[0] == '\n' ||
-                   Buffer->Cursor[0] == '\0')
-                {
-                        break;
-                }
-                Buffer->Cursor++;
-        }
-        Buffer->Cursor++;
-}
-
-size_t
-FileSize(char *FileName)
-{
-        size_t FileSize = 0;
-        FILE *File = fopen(FileName, "r");
-        if(File != NULL)
-        {
-                fseek(File, 0, SEEK_END);
-                FileSize = ftell(File);
-                fclose(File);
-        }
-        return(FileSize + 1);
-}
-
-gs_bool
-CopyFileIntoBuffer(char *FileName, buffer *Buffer)
-{
-        FILE *File = fopen(FileName, "r");
-        if(File == NULL) return(false);
-
-        fseek(File, 0, SEEK_END);
-        size_t FileSize = ftell(File);
-        int Remaining = (Buffer->Start + Buffer->Capacity) - Buffer->Cursor;
-        if(FileSize > Remaining) return(false);
-
-        fseek(File, 0, SEEK_SET);
-        fread(Buffer->Cursor, 1, FileSize, File);
-        Buffer->Length += FileSize;
-        Buffer->Cursor += FileSize;
-        *(Buffer->Cursor) = '\0';
-
-        return(true);
-}
-
-void
-GenerateSourceFile(buffer *Buffer, char *ConfigFileBaseName, char *StructName)
+GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName, char *StructName)
 {
         char *Key;
         char *Value;
@@ -120,7 +39,7 @@ GenerateSourceFile(buffer *Buffer, char *ConfigFileBaseName, char *StructName)
 
         while(true)
         {
-                if(BufferIsEOF(Buffer)) break;
+                if(GSBufferIsEOF(Buffer)) break;
 
                 /* NOTE(AARON): sscanf doesn't work if doing: sscanf("key:value", %s:%s, Key, Value); */
                 /*              use strtok(...) instead. */
@@ -129,7 +48,7 @@ GenerateSourceFile(buffer *Buffer, char *ConfigFileBaseName, char *StructName)
                 char *Newline = strchr(Buffer->Cursor, '\n');
                 if(Colon == NULL || Newline < Colon)
                 {
-                        BufferAdvanceToNextLine(Buffer);
+                        GSBufferNextLine(Buffer);
                         continue;
                 }
 
@@ -159,7 +78,7 @@ GenerateSourceFile(buffer *Buffer, char *ConfigFileBaseName, char *StructName)
                                 fprintf(StructInit,   "        Self->%s = \"%s\";\n", Key, Value);
                         }
                 }
-                BufferAdvanceToNextLine(Buffer);
+                GSBufferNextLine(Buffer);
         }
 
         fprintf(StructDefine, "} %s;\n", StructName);
@@ -168,14 +87,14 @@ GenerateSourceFile(buffer *Buffer, char *ConfigFileBaseName, char *StructName)
         fclose(StructDefine);
         fclose(StructInit);
 
-        int AllocSize = FileSize(StructDefineFilename) + FileSize(StructInitFilename);
-        buffer OutputBuffer;
-        BufferSet(&OutputBuffer, (char *)alloca(AllocSize), 0, AllocSize);
+        int AllocSize = GSFileSize(StructDefineFilename) + GSFileSize(StructInitFilename);
+        gs_buffer OutputBuffer;
+        GSBufferInit(&OutputBuffer, (char *)alloca(AllocSize), AllocSize);
 
-        if(!CopyFileIntoBuffer(StructDefineFilename, &OutputBuffer))
+        if(!GSFileCopyToBuffer(StructDefineFilename, &OutputBuffer))
                 GSAbortWithMessage("Couldn't copy %s into memory\n", StructDefineFilename);
 
-        if(!CopyFileIntoBuffer(StructInitFilename, &OutputBuffer))
+        if(!GSFileCopyToBuffer(StructInitFilename, &OutputBuffer))
                 GSAbortWithMessage("Couldn't copy %s into memory\n", StructInitFilename);
 
         memset(Temp, 0, MaxStringLength);
@@ -208,12 +127,14 @@ Usage(char *ProgramName)
 }
 
 int
-main(int ArgCount, char **Args)
+main(int ArgCount, char **Arguments)
 {
-        if(GSArgHelpWanted(ArgCount, Args) || ArgCount == 1) Usage(Args[0]);
+        gs_args Args;
+        GSArgInit(&Args, ArgCount, Arguments);
+        if(GSArgHelpWanted(&Args) || ArgCount == 1) Usage(GSArgProgramName(&Args));
 
         char ConfigCFile[MaxStringLength];
-        char *ConfigFile = GSArgAtIndex(ArgCount, Args, 1);
+        char *ConfigFile = GSArgAtIndex(&Args, 1);
         int StringLength = GSStringLength(ConfigFile);
         char *ExtensionStart = strchr(ConfigFile, '.');
         if(ExtensionStart != NULL)
@@ -223,9 +144,9 @@ main(int ArgCount, char **Args)
         sprintf(ConfigCFile, "%.*s", StringLength, ConfigFile);
 
         char *StructName;
-        if(GSArgIsPresent(ArgCount, Args, "--struct-name"))
+        if(GSArgIsPresent(&Args, "--struct-name"))
         {
-                StructName = GSArgAfter(ArgCount, Args, "--struct-name");
+                StructName = GSArgAfter(&Args, "--struct-name");
         }
         else
         {
@@ -233,13 +154,13 @@ main(int ArgCount, char **Args)
                 sprintf(StructName, "%.*s", StringLength, ConfigFile);
         }
 
-        size_t AllocSize = FileSize(ConfigFile);
-        buffer Buffer;
-        BufferSet(&Buffer, (char *)alloca(AllocSize), 0, AllocSize);
+        size_t AllocSize = GSFileSize(ConfigFile);
+        gs_buffer Buffer;
+        GSBufferInit(&Buffer, (char *)alloca(AllocSize), AllocSize);
 
-        if(!CopyFileIntoBuffer(ConfigFile, &Buffer))
+        if(!GSFileCopyToBuffer(ConfigFile, &Buffer))
                 GSAbortWithMessage("Couldn't copy %s into memory\n", ConfigFile);
-        BufferResetCursor(&Buffer);
+        Buffer.Cursor = Buffer.Start;
 
         GenerateSourceFile(&Buffer, ConfigCFile, StructName);
 
