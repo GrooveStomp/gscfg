@@ -493,7 +493,7 @@ GSFileSize(char *FileName)
                 FileSize = ftell(File);
                 fclose(File);
         }
-        return(FileSize + 1);
+        return(FileSize);
 }
 
 gs_bool
