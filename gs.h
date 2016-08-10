@@ -1,7 +1,7 @@
 /******************************************************************************
  * File: gs.h
  * Created: 2016-07-14
- * Last Updated: 2016-08-09
+ * Last Updated: 2016-08-10
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
  *-----------------------------------------------------------------------------
@@ -45,8 +45,16 @@
 #define GSMax(A, B) ((A) < (B) ? (B) : (A))
 #define GSMin(A, B) ((A) < (B) ? (A) : (B))
 
+#define GSAbortWithMessage(...) \
+        { \
+                char String##__LINE__[256];                             \
+                sprintf(String##__LINE__, "In %s() at line #%i: ", __func__, __LINE__); \
+                fprintf(stderr, String##__LINE__);                       \
+                __GSAbortWithMessage(__VA_ARGS__);                      \
+        }
+
 void
-GSAbortWithMessage(char *FormatString, ...)
+__GSAbortWithMessage(char *FormatString, ...)
 {
         va_list Args;
         va_start(Args, FormatString);
@@ -447,6 +455,7 @@ typedef struct gs_buffer
         char *Cursor;
         size_t Capacity;
         size_t Length;
+        char *SavedCursor;
 } gs_buffer;
 
 gs_buffer *
@@ -456,6 +465,7 @@ GSBufferInit(gs_buffer *Buffer, char *Start, size_t Size)
         Buffer->Cursor = Start;
         Buffer->Length = 0;
         Buffer->Capacity = Size;
+        Buffer->SavedCursor = NULL;
         return(Buffer);
 }
 
@@ -480,6 +490,23 @@ GSBufferNextLine(gs_buffer *Buffer)
                 Buffer->Cursor++;
         }
         Buffer->Cursor++;
+}
+
+gs_bool
+GSBufferSaveCursor(gs_buffer *Buffer)
+{
+        Buffer->SavedCursor = Buffer->Cursor;
+        return(true);
+}
+
+gs_bool
+GSBufferRestoreCursor(gs_buffer *Buffer)
+{
+        if(Buffer->SavedCursor == NULL) return(false);
+
+        Buffer->Cursor = Buffer->SavedCursor;
+        Buffer->SavedCursor = NULL;
+        return(true);
 }
 
 size_t
