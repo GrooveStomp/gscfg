@@ -152,14 +152,24 @@ void
 PrintIndent(char *String, unsigned int Level)
 {
         char Temp[255];
-        sprintf(Temp, "%%%is%c", Level * 8, '\0');
-        sprintf(String, Temp, " ");
+        if(Level == 0)
+        {
+                sprintf(String, "%s", "");
+        }
+        else
+        {
+                sprintf(Temp, "%%%is%c", Level * GConfig.Indent, '\0');
+                sprintf(String, Temp, " ");
+        }
 }
 
 unsigned int /* Resultant ConfigStack depth. */
 UnwindNestedStructs(config_stack *ConfigStack, unsigned int NumSpaces, FILE *StructDefine)
 {
         char IndentString[MaxStringLength];
+        char Indent[MaxStringLength];
+        PrintIndent(Indent, 1);
+
         int StructIndex = -1;
         for(int I = 0; I < ConfigStack->Count; I++)
         {
@@ -179,7 +189,7 @@ UnwindNestedStructs(config_stack *ConfigStack, unsigned int NumSpaces, FILE *Str
         {
                 PrintIndent(IndentString, ConfigStack->Count - 1);
                 char *StructName = ConfigStackNameAt(ConfigStack, I);
-                fprintf(StructDefine, "%s        } %s;\n", IndentString, StructName);
+                fprintf(StructDefine, "%s%s} %s;\n", IndentString, Indent, StructName);
                 ConfigStackDrop(ConfigStack);
         }
 
@@ -211,15 +221,18 @@ PrintInitFunctionOpening(FILE *File)
 void
 PrintInitFunctionSourceLine(FILE *File, char *Attribute, char *Value)
 {
+        char Indent[MaxStringLength];
+        PrintIndent(Indent, 1);
+
         switch(GConfig.SourceStyle)
         {
                 case(SOURCE_STYLE_CAMELCASE):
                 {
-                        fprintf(File, "        Self->%s = \"%s\";\n", Attribute, Value);
+                        fprintf(File, "%sSelf->%s = \"%s\";\n", Indent, Attribute, Value);
                 } break;
                 default:
                 {
-                        fprintf(File, "        self->%s = \"%s\";\n", Attribute, Value);
+                        fprintf(File, "%sself->%s = \"%s\";\n", Indent, Attribute, Value);
                 } break;
         }
 }
@@ -280,6 +293,8 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                 GSStringCopyWithNull(Temp, Key, StringLength);
 
                 int NumSpaces;
+                char Indent[MaxStringLength];
+                PrintIndent(Indent, 1);
 
                 if(Value == NULL)
                 {
@@ -292,8 +307,8 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                         /* Nested struct definition */
                         PrintIndent(IndentString, ConfigStack.Count);
                         ConfigStackAdd(&ConfigStack, Key, NumSpaces);
-                        fprintf(StructDefine, "%s        struct\n", IndentString);
-                        fprintf(StructDefine, "%s        {\n", IndentString);
+                        fprintf(StructDefine, "%s%sstruct\n", IndentString, Indent);
+                        fprintf(StructDefine, "%s%s{\n", IndentString, Indent);
 
                         /* Advanced and continue with the parsing. */
                         GSBufferNextLine(Buffer);
@@ -308,7 +323,7 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                 }
 
                 PrintIndent(IndentString, ConfigStack.Count);
-                fprintf(StructDefine, "%s        char *%s;\n", IndentString, Key);
+                fprintf(StructDefine, "%s%schar *%s;\n", IndentString, Indent, Key);
                 memset(Temp, 0, MaxStringLength);
                 StringLength = GSMin(GSStringLength(Value), MaxStringLength);
                 StringLength = GSStringCopyWithoutSurroundingWhitespace(Value, Temp, StringLength);
@@ -411,7 +426,7 @@ main(int ArgCount, char **Arguments)
         else
         {
                 GConfig.StructName = (char *)alloca(MaxStringLength);
-                sprintf(StructName, "%.*s", StringLength, ConfigFile);
+                sprintf(GConfig.StructName, "%.*s", StringLength, ConfigFile);
         }
 
         GConfig.SourceStyle = SOURCE_STYLE_C;
