@@ -1,7 +1,11 @@
+/*
+  TODO: --style Casey
+*/
+
 /******************************************************************************
  * File: main.c
  * Created: 2016-08-09
- * Last Updated: 2016-08-10
+ * Last Updated: 2016-08-17
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
  *-----------------------------------------------------------------------------
@@ -197,44 +201,129 @@ UnwindNestedStructs(config_stack *ConfigStack, unsigned int NumSpaces, FILE *Str
 }
 
 void
-PrintInitFunctionOpening(FILE *File)
+PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
 {
-        fprintf(File, "void\n");
+        /* Define */
+        fprintf(Define, "#include <string.h> /* strncmp */\n");
+        fprintf(Define, "typedef struct %s\n", GConfig.StructName);
+        fprintf(Define, "{\n");
+
+        /* Print Init Function Intro */
+        fprintf(Init, "void\n");
         switch(GConfig.SourceStyle)
         {
                 case(SOURCE_STYLE_CAMELCASE):
                 {
-                        fprintf(File, "%sInit(%s *Self)\n", GConfig.StructName, GConfig.StructName);
+                        fprintf(Init, "%sInit(%s *Self)\n", GConfig.StructName, GConfig.StructName);
                 } break;
                 case(SOURCE_STYLE_SNAKECASE):
                 {
-                        fprintf(File, "%s_init(%s *self)\n", GConfig.StructName, GConfig.StructName);
+                        fprintf(Init, "%s_init(%s *self)\n", GConfig.StructName, GConfig.StructName);
                 } break;
                 default:
                 {
-                        fprintf(File, "%sinit(%s *self)\n", GConfig.StructName, GConfig.StructName);
+                        fprintf(Init, "%sinit(%s *self)\n", GConfig.StructName, GConfig.StructName);
                 } break;
         }
-        fprintf(File, "{\n");
+        fprintf(Init, "{\n");
+
+        /* Print Query Function Intro */
+        fprintf(Query, "unsigned int\n");
+        switch(GConfig.SourceStyle)
+        {
+                case(SOURCE_STYLE_CAMELCASE):
+                {
+                        fprintf(Query, "%sHasKey(%s *Self, char *String)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+                case(SOURCE_STYLE_SNAKECASE):
+                {
+                        fprintf(Query, "%s_has_key(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+                default:
+                {
+                        fprintf(Query, "%shaskey(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+        }
+        fprintf(Query, "{\n");
+
+        /* Print Get Function Intro */
+        fprintf(Get, "char *\n");
+        switch(GConfig.SourceStyle)
+        {
+                case(SOURCE_STYLE_CAMELCASE):
+                {
+                        fprintf(Get, "%sGet(%s *Self, char *String)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+                case(SOURCE_STYLE_SNAKECASE):
+                {
+                        fprintf(Get, "%s_get(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+                default:
+                {
+                        fprintf(Get, "%sget(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+        }
+        fprintf(Get, "{\n");
 }
 
 void
-PrintInitFunctionSourceLine(FILE *File, char *Attribute, char *Value)
+PrintFunctionSource(FILE *Init, FILE *Query, FILE *Get, char *Attribute, char *Value)
 {
         char Indent[MaxStringLength];
         PrintIndent(Indent, 1);
 
+        /* Init */
         switch(GConfig.SourceStyle)
         {
                 case(SOURCE_STYLE_CAMELCASE):
                 {
-                        fprintf(File, "%sSelf->%s = \"%s\";\n", Indent, Attribute, Value);
+                        fprintf(Init, "%sSelf->%s = \"%s\";\n", Indent, Attribute, Value);
                 } break;
                 default:
                 {
-                        fprintf(File, "%sself->%s = \"%s\";\n", Indent, Attribute, Value);
+                        fprintf(Init, "%sself->%s = \"%s\";\n", Indent, Attribute, Value);
                 } break;
         }
+
+        /* Query */
+        fprintf(Query, "%sif(strncmp(String, \"%s\", %lu) == 0)\n", Indent, Attribute, GSStringLength(Attribute));
+        fprintf(Query, "%s{\n", Indent);
+        fprintf(Query, "%s%sreturn(!0);\n", Indent, Indent);
+        fprintf(Query, "%s}\n", Indent);
+
+        /* Get */
+        fprintf(Get, "%sif(strncmp(String, \"%s\", %lu) == 0)\n", Indent,  Attribute, GSStringLength(Attribute));
+        fprintf(Get, "%s{\n", Indent);
+        switch(GConfig.SourceStyle)
+        {
+                case(SOURCE_STYLE_CAMELCASE):
+                {
+                        fprintf(Get, "%s%sreturn(Self->%s);\n", Indent, Indent, Attribute);
+                } break;
+                default:
+                {
+                        fprintf(Get, "%s%sreturn(self->%s);\n", Indent, Indent, Attribute);
+                } break;
+        }
+        fprintf(Get, "%s}\n", Indent);
+}
+
+void
+PrintFunctionOutros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
+{
+        char Indent[MaxStringLength];
+        PrintIndent(Indent, 1);
+
+        /* Define */
+        fprintf(Define, "} %s;\n", GConfig.StructName);
+        /* Init */
+        fprintf(Init, "}\n");
+        /* Query */
+        fprintf(Query, "%sreturn(0);\n", Indent);
+        fprintf(Query, "}\n");
+        /* Get */
+        fprintf(Get, "%sreturn(NULL);\n", Indent);
+        fprintf(Get, "}\n");
 }
 
 void
@@ -250,13 +339,17 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
 
         char *StructDefineFilename = "_struct_define.c";
         FILE *StructDefine = fopen(StructDefineFilename, "w");
-        fprintf(StructDefine, "typedef struct %s\n", GConfig.StructName);
-        fprintf(StructDefine, "{\n");
 
         char *StructInitFilename = "_struct_init.c";
         FILE *StructInit = fopen(StructInitFilename, "w");
 
-        PrintInitFunctionOpening(StructInit);
+        char *StructQueryFilename = "_struct_query.c";
+        FILE *StructQuery = fopen(StructQueryFilename, "w");
+
+        char *StructGetFilename = "_struct_get.c";
+        FILE *StructGet = fopen(StructGetFilename, "w");
+
+        PrintFunctionIntros(StructDefine, StructInit, StructQuery, StructGet);
 
         while(true)
         {
@@ -342,17 +435,21 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                         }
                 }
                 GSStringCopyWithNull(Key, CompoundNamePtr, GSStringLength(Key));
-                PrintInitFunctionSourceLine(StructInit, CompoundName, Value);
+                PrintFunctionSource(StructInit, StructQuery, StructGet, CompoundName, Value);
                 GSBufferNextLine(Buffer);
         }
 
-        fprintf(StructDefine, "} %s;\n", GConfig.StructName);
-        fprintf(StructInit, "}\n");
+        PrintFunctionOutros(StructDefine, StructInit, StructQuery, StructGet);
 
         fclose(StructDefine);
         fclose(StructInit);
+        fclose(StructQuery);
+        fclose(StructGet);
 
-        int AllocSize = GSFileSize(StructDefineFilename) + GSFileSize(StructInitFilename);
+        int AllocSize = GSFileSize(StructDefineFilename) +
+                GSFileSize(StructInitFilename) +
+                GSFileSize(StructQueryFilename) +
+                GSFileSize(StructGetFilename);
         gs_buffer OutputBuffer;
         GSBufferInit(&OutputBuffer, (char *)alloca(AllocSize), AllocSize);
 
@@ -362,6 +459,12 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
         if(!GSFileCopyToBuffer(StructInitFilename, &OutputBuffer))
                 GSAbortWithMessage("Couldn't copy %s into memory\n", StructInitFilename);
 
+        if(!GSFileCopyToBuffer(StructQueryFilename, &OutputBuffer))
+                GSAbortWithMessage("Couldn't copy %s into memory\n", StructQueryFilename);
+
+        if(!GSFileCopyToBuffer(StructGetFilename, &OutputBuffer))
+                GSAbortWithMessage("Couldn't copy %s into memory\n", StructGetFilename);
+
         memset(Temp, 0, MaxStringLength);
         sprintf(Temp, "%s.c", ConfigFileBaseName);
         FILE *Out = fopen(Temp, "w");
@@ -370,6 +473,8 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
 
         remove(StructDefineFilename);
         remove(StructInitFilename);
+        remove(StructQueryFilename);
+        remove(StructGetFilename);
         ConfigStackDestroy(&ConfigStack);
 }
 
@@ -391,10 +496,11 @@ Usage(char *ProgramName)
         puts("\t--struct-name: Name of generated C struct. Defaults to config-file basename.");
         puts("\t--style: One of: CamelCase, snake_case, c");
         puts("\t         This affects the initialization function generated for the config struct.");
-        puts("\t         eg.: With `--struct-name config_t'");
-        puts("\t         [CamelCase]  void config_tInit(config_t *Self);");
-        puts("\t         [snake_case] void config_t_init(config_t *Self);");
-        puts("\t         [c]          void config_tinit(config_t *Self);");
+        puts("\t         eg.: With `--struct-name config'");
+        puts("\t         [CamelCase]  void configInit(config *Self);");
+        puts("\t         [snake_case] void config_init(config *self);");
+        puts("\t         [c]          void configinit(config *self);");
+        puts("\t         [Casey]      void ConfigInit(config *Self);");
         puts("\t         If nothing is specified, defaults to `c' style.");
         puts("\t--indent: Number of spaces to indent generated source code per indentation level.");
         puts("\t          Defaults to 8.");
