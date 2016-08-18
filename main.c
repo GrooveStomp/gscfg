@@ -500,7 +500,7 @@ Usage(char *ProgramName)
         puts("\t         [CamelCase]  void configInit(config *Self);");
         puts("\t         [snake_case] void config_init(config *self);");
         puts("\t         [c]          void configinit(config *self);");
-        puts("\t         [Casey]      void ConfigInit(config *Self);");
+        puts("\t         [Casey]      void ConfigInit(config *Self); (Coming Soon!)");
         puts("\t         If nothing is specified, defaults to `c' style.");
         puts("\t--indent: Number of spaces to indent generated source code per indentation level.");
         puts("\t          Defaults to 8.");

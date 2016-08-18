@@ -1,3 +1,55 @@
+--------------------------------------------------------------------------------
+ Introduction
+--------------------------------------------------------------------------------
+This is my configuration file preprocessor.
+It reads a yaml-esque human-readable configuration file and outputs C code that
+you `#include' into your C program.
+
+Here's an example:
+
+    /* Configuration File: settings.cfg */
+    type: monster
+    name: Bruce
+    attributes:
+            color: brown
+            class: barbarian
+            damage: Maximum!
+    game_speed: 0.5
+
+    /* Now run gscfg */
+    > gscfg settings.cfg --struct-name monster_cfg --style snake_case
+
+    /* Now include settings.c in your C program */
+    #include "settings.c"
+    #include <stdio.h>
+
+    void
+    main()
+    {
+            monster_cfg cfg;
+            monster_cfg_init(&cfg);
+            if(monster_cfg_has_key(&cfg, "attributes.color"))
+            {
+                    printf("Monster is the color: %s\n",
+                           monster_cfg_get(&cfg, "attributes.color"));
+            }
+            printf("Monster is a: %s\n", cfg.attributes.class);
+    }
+
+--------------------------------------------------------------------------------
+ Setup, Building and Running
+--------------------------------------------------------------------------------
+
+> git clone https://GrooveStomp@bitbucket.org/GrooveStomp/gscfg.git
+> cd gscfg
+> source env/shell
+> build
+> ./gscfg --help
+
+--------------------------------------------------------------------------------
+ Motivation
+--------------------------------------------------------------------------------
+
 For a side project I wanted to use a really lightweight library for reading
 config files. Preferrably this library would not use dynamic allocations and
 would give me an in-memory structure to interact with.
@@ -31,15 +83,3 @@ almost-there libraries that might work for you:
     actually read data from my config file as expected. Probably user error.
     It also does dynamic allocations with malloc and is in a very early
     pre-alpha state.
-
-I may actually go back to MessagePack, but it fails miserably compared to my
-ideal of a single-header drop-in library.
-
---------------------------------------------------------------------------------
- Setup
---------------------------------------------------------------------------------
-
-> cd /path/to/project
-> source env/shell
-> build
-> run

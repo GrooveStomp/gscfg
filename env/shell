@@ -19,11 +19,5 @@ function build() {
 
     gcc $cflags -c main.c &&
         mv *.o env/build/ &&
-        gcc -o env/build/run env/build/*.o
-}
-
-function run() {
-    if [ -f env/build/run ]; then
-        env/build/run "$@"
-    fi
+        gcc -o gscfg env/build/*.o
 }
