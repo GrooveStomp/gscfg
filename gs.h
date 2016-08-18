@@ -273,12 +273,16 @@ GSStringCopyWithoutSurroundingWhitespaceWithNull(char *Source, char *Dest, unsig
         return(Count);
 }
 
-void /* eg.: hellOTherE -> Hellothere, my_friend -> MyFriend */
+/*
+  eg.: hellOTherE -> Hellothere, my_friend -> MyFriend. Strips out
+  non-alphanumeric chars.
+*/
+void
 GSStringCapitalize(char *Source, char *Dest, unsigned int SourceLength)
 {
         while(true)
         {
-                if(GSCharIsAlphabetical(*Source))
+                if(GSCharIsAlphanumeric(*Source))
                         break;
 
                 Source++;
@@ -295,7 +299,7 @@ GSStringCapitalize(char *Source, char *Dest, unsigned int SourceLength)
                 {
                         UpcaseNextChar = true;
                 }
-                else if(GSCharIsAlphabetical(Source[I]))
+                else if(GSCharIsAlphanumeric(Source[I]))
                 {
                         if(UpcaseNextChar)
                         {
