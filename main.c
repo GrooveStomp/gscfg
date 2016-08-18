@@ -1,11 +1,7 @@
-/*
-  TODO: --style Casey
-*/
-
 /******************************************************************************
  * File: main.c
  * Created: 2016-08-09
- * Last Updated: 2016-08-17
+ * Last Updated: 2016-08-18
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
  *-----------------------------------------------------------------------------
@@ -29,7 +25,8 @@ typedef enum source_style_e
 {
         SOURCE_STYLE_CAMELCASE,
         SOURCE_STYLE_SNAKECASE,
-        SOURCE_STYLE_C
+        SOURCE_STYLE_C,
+        SOURCE_STYLE_CASEY
 } source_style_e;
 
 typedef struct config
@@ -220,6 +217,13 @@ PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
                 {
                         fprintf(Init, "%s_init(%s *self)\n", GConfig.StructName, GConfig.StructName);
                 } break;
+                case(SOURCE_STYLE_CASEY):
+                {
+                        char ModifiedStructName[MaxStringLength];
+                        memset(ModifiedStructName, 0, MaxStringLength);
+                        GSStringCapitalize(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        fprintf(Init, "%sInit(%s *Self)\n", ModifiedStructName, GConfig.StructName);
+                } break;
                 default:
                 {
                         fprintf(Init, "%sinit(%s *self)\n", GConfig.StructName, GConfig.StructName);
@@ -238,6 +242,13 @@ PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
                 case(SOURCE_STYLE_SNAKECASE):
                 {
                         fprintf(Query, "%s_has_key(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
+                } break;
+                case(SOURCE_STYLE_CASEY):
+                {
+                        char ModifiedStructName[MaxStringLength];
+                        memset(ModifiedStructName, 0, MaxStringLength);
+                        GSStringCapitalize(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        fprintf(Query, "%sHasKey(%s *Self, char *String)\n", ModifiedStructName, GConfig.StructName);
                 } break;
                 default:
                 {
@@ -258,6 +269,13 @@ PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
                 {
                         fprintf(Get, "%s_get(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
                 } break;
+                case(SOURCE_STYLE_CASEY):
+                {
+                        char ModifiedStructName[MaxStringLength];
+                        memset(ModifiedStructName, 0, MaxStringLength);
+                        GSStringCapitalize(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        fprintf(Get, "%sGet(%s *Self, char *String)\n", ModifiedStructName, GConfig.StructName);
+                } break;
                 default:
                 {
                         fprintf(Get, "%sget(%s *self, char *string)\n", GConfig.StructName, GConfig.StructName);
@@ -275,6 +293,7 @@ PrintFunctionSource(FILE *Init, FILE *Query, FILE *Get, char *Attribute, char *V
         /* Init */
         switch(GConfig.SourceStyle)
         {
+                case(SOURCE_STYLE_CASEY):
                 case(SOURCE_STYLE_CAMELCASE):
                 {
                         fprintf(Init, "%sSelf->%s = \"%s\";\n", Indent, Attribute, Value);
@@ -296,6 +315,7 @@ PrintFunctionSource(FILE *Init, FILE *Query, FILE *Get, char *Attribute, char *V
         fprintf(Get, "%s{\n", Indent);
         switch(GConfig.SourceStyle)
         {
+                case(SOURCE_STYLE_CASEY):
                 case(SOURCE_STYLE_CAMELCASE):
                 {
                         fprintf(Get, "%s%sreturn(Self->%s);\n", Indent, Indent, Attribute);
@@ -422,7 +442,7 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                 StringLength = GSStringCopyWithoutSurroundingWhitespace(Value, Temp, StringLength);
                 GSStringCopyWithNull(Temp, Value, StringLength);
 
-                char CompoundName[256];
+                char CompoundName[MaxStringLength];
                 char *CompoundNamePtr = CompoundName;
                 if(ConfigStack.Count > 0)
                 {
@@ -500,7 +520,7 @@ Usage(char *ProgramName)
         puts("\t         [CamelCase]  void configInit(config *Self);");
         puts("\t         [snake_case] void config_init(config *self);");
         puts("\t         [c]          void configinit(config *self);");
-        puts("\t         [Casey]      void ConfigInit(config *Self); (Coming Soon!)");
+        puts("\t         [Casey]      void ConfigInit(config *Self);");
         puts("\t         If nothing is specified, defaults to `c' style.");
         puts("\t--indent: Number of spaces to indent generated source code per indentation level.");
         puts("\t          Defaults to 8.");
@@ -546,6 +566,10 @@ main(int ArgCount, char **Arguments)
                 else if(GSStringIsEqual("snake_case", StyleString, GSStringLength("snake_case")))
                 {
                         GConfig.SourceStyle = SOURCE_STYLE_SNAKECASE;
+                }
+                else if(GSStringIsEqual("Casey", StyleString, GSStringLength("Casey")))
+                {
+                        GConfig.SourceStyle = SOURCE_STYLE_CASEY;
                 }
         }
 

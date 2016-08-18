@@ -1,7 +1,7 @@
 /******************************************************************************
  * File: gs.h
  * Created: 2016-07-14
- * Last Updated: 2016-08-10
+ * Last Updated: 2016-08-18
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
  *-----------------------------------------------------------------------------
@@ -138,6 +138,34 @@ GSCharIsAlphanumeric(char C)
         return(Result);
 }
 
+char
+GSCharUpcase(char C)
+{
+        char Result = C;
+        if(GSCharIsAlphabetical(C) &&
+           (C >= 'a' && C <= 'z'))
+        {
+                int Delta = C - 'a';
+                Result = Delta + 'A';
+        }
+
+        return(Result);
+}
+
+char
+GSCharDowncase(char C)
+{
+        char Result = C;
+        if(GSCharIsAlphabetical(C) &&
+           (C >= 'A' &&C <= 'Z'))
+        {
+                int Delta = C - 'A';
+                Result = Delta + 'a';
+        }
+
+        return(Result);
+}
+
 /******************************************************************************
  * String Definitions
  *-----------------------------------------------------------------------------
@@ -243,6 +271,45 @@ GSStringCopyWithoutSurroundingWhitespaceWithNull(char *Source, char *Dest, unsig
         Dest[Count] = '\0';
 
         return(Count);
+}
+
+void /* eg.: hellOTherE -> Hellothere, my_friend -> MyFriend */
+GSStringCapitalize(char *Source, char *Dest, unsigned int SourceLength)
+{
+        while(true)
+        {
+                if(GSCharIsAlphabetical(*Source))
+                        break;
+
+                Source++;
+                SourceLength--;
+        }
+
+        *Dest = GSCharUpcase(*Source);
+        Dest++;
+
+        gs_bool UpcaseNextChar = false;
+        for(int I=1; I<SourceLength; I++)
+        {
+                if('_' == Source[I])
+                {
+                        UpcaseNextChar = true;
+                }
+                else if(GSCharIsAlphabetical(Source[I]))
+                {
+                        if(UpcaseNextChar)
+                        {
+                                UpcaseNextChar = false;
+                                *Dest = GSCharUpcase(Source[I]);
+                                Dest++;
+                        }
+                        else
+                        {
+                                *Dest = GSCharDowncase(Source[I]);
+                                Dest++;
+                        }
+                }
+        }
 }
 
 /******************************************************************************
