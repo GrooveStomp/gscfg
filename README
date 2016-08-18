@@ -7,34 +7,40 @@ you `#include' into your C program.
 
 Here's an example:
 
-    /* Configuration File: settings.cfg */
-    type: monster
-    name: Bruce
-    attributes:
-            color: brown
-            class: barbarian
-            damage: Maximum!
-    game_speed: 0.5
+settings.cfg:
++------------------------------------------------------------------------------+
+|type: monster                                                                 |
+|name: Bruce                                                                   |
+|attributes:                                                                   |
+|        color: brown                                                          |
+|        class: barbarian                                                      |
+|        damage: Maximum!                                                      |
+|game_speed: 0.5                                                               |
++------------------------------------------------------------------------------+
 
-    /* Now run gscfg */
-    > gscfg settings.cfg --struct-name monster_cfg --style snake_case
+shell:
++------------------------------------------------------------------------------+
+|> gscfg settings.cfg --struct-name monster_cfg --style snake_case             |
++------------------------------------------------------------------------------+
 
-    /* Now include settings.c in your C program */
-    #include "settings.c"
-    #include <stdio.h>
-
-    void
-    main()
-    {
-            monster_cfg cfg;
-            monster_cfg_init(&cfg);
-            if(monster_cfg_has_key(&cfg, "attributes.color"))
-            {
-                    printf("Monster is the color: %s\n",
-                           monster_cfg_get(&cfg, "attributes.color"));
-            }
-            printf("Monster is a: %s\n", cfg.attributes.class);
-    }
+Now include settings.c in your C program:
++------------------------------------------------------------------------------+
+|#include "settings.c"                                                         |
+|#include <stdio.h>                                                            |
+|                                                                              |
+|void                                                                          |
+|main()                                                                        |
+|{                                                                             |
+|        monster_cfg cfg;                                                      |
+|        monster_cfg_init(&cfg);                                               |
+|        if(monster_cfg_has_key(&cfg, "attributes.color"))                     |
+|        {                                                                     |
+|                printf("Monster is the color: %s\n",                          |
+|                       monster_cfg_get(&cfg, "attributes.color"));            |
+|        }                                                                     |
+|        printf("Monster is a: %s\n", cfg.attributes.class);                   |
+|}                                                                             |
++------------------------------------------------------------------------------+
 
 --------------------------------------------------------------------------------
  Setup, Building and Running
