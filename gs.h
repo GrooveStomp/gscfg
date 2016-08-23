@@ -1,20 +1,23 @@
 /******************************************************************************
  * File: gs.h
  * Created: 2016-07-14
- * Last Updated: 2016-08-18
+ * Last Updated: 2016-08-23
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
  *-----------------------------------------------------------------------------
  *
- * Standard library for personal use. Heavily influenced by Sean Barrett's stb.
+ * Standard library for personal use. Heavily influenced by Sean Barrett's stb
+ * and Casey Muratori's Handmade Hero.
  *
  ******************************************************************************/
-#define GS_VERSION 0.1.0
+#ifndef GS_VERSION
+#define GS_VERSION 0.3.0
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> /* memset */
 #include <stdarg.h> /* va_list */
+#include <libgen.h> /* basename */
 
 #define GSArraySize(Array) (sizeof((Array)) / sizeof((Array)[0]))
 
@@ -50,17 +53,17 @@
                 char String##__LINE__[256];                             \
                 sprintf(String##__LINE__, "In %s() at line #%i: ", __func__, __LINE__); \
                 fprintf(stderr, String##__LINE__);                       \
-                __GSAbortWithMessage(__VA_ARGS__);                      \
+                fprintf(stderr, __VA_ARGS__); \
+                exit(EXIT_FAILURE); \
         }
 
-void
-__GSAbortWithMessage(char *FormatString, ...)
-{
-        va_list Args;
-        va_start(Args, FormatString);
-        fprintf(stderr, FormatString, Args);
-        exit(EXIT_FAILURE);
-}
+#define GS1024Inverse 1.0/1024
+#define GSBytesToKilobytes(X) (X) * GS1024Inverse
+#define GSBytesToMegabytes(X) GSBytesToKilobytes((X)) * GS1024Inverse
+#define GSBytesToGigabytes(X) GSBytesToMegabytes((X)) * GS1024Inverse
+
+#define GSNullChar '\0'
+#define GSNullPtr NULL
 
 /******************************************************************************
  * Boolean Definitions
@@ -138,6 +141,17 @@ GSCharIsAlphanumeric(char C)
         return(Result);
 }
 
+gs_bool
+GSCharIsUpcase(char C)
+{
+        gs_bool Result =
+                GSCharIsAlphabetical(C) &&
+                (C >= 'A') &&
+                (C <= 'Z');
+
+        return(Result);
+}
+
 char
 GSCharUpcase(char C)
 {
@@ -148,6 +162,17 @@ GSCharUpcase(char C)
                 int Delta = C - 'a';
                 Result = Delta + 'A';
         }
+
+        return(Result);
+}
+
+gs_bool
+GSCharIsDowncase(char C)
+{
+        gs_bool Result =
+                GSCharIsAlphabetical(C) &&
+                (C >= 'a') &&
+                (C <= 'z');
 
         return(Result);
 }
@@ -177,6 +202,13 @@ GSStringIsEqual(char *LeftString, char *RightString, int MaxNumToMatch)
 {
 	int NumMatched = 0;
 
+        if(*LeftString == GSNullChar ||
+           *RightString == GSNullChar &&
+           *LeftString != *RightString)
+        {
+                return(false);
+        }
+
 	while(NumMatched < MaxNumToMatch)
 	{
 		if(*LeftString == *RightString)
@@ -203,7 +235,7 @@ GSStringLength(char *String)
 }
 
 gs_bool
-GSStringCopyWithNull(char *Source, char *Dest, int Max)
+GSStringCopy(char *Source, char *Dest, int Max)
 {
         if(Source == NULL || Dest == NULL)
         {
@@ -221,7 +253,7 @@ GSStringCopyWithNull(char *Source, char *Dest, int Max)
 }
 
 gs_bool
-GSStringCopy(char *Source, char *Dest, int Max)
+GSStringCopyNoNull(char *Source, char *Dest, int Max)
 {
         if(Source == NULL || Dest == NULL)
         {
@@ -236,9 +268,13 @@ GSStringCopy(char *Source, char *Dest, int Max)
         return(true);
 }
 
+/* NOTE: Assumes a maximum string length of 512 bytes. */
 unsigned int /* Returns number of bytes copied. */
-GSStringCopyWithoutSurroundingWhitespace(char *Source, char *Dest, unsigned int MaxLength)
+GSStringTrimWhitespace(char *Source, unsigned int MaxLength)
 {
+        char Dest[512];
+        MaxLength = GSMin(512, MaxLength);
+
         int FirstChar, LastChar;
         for(FirstChar = 0; GSCharIsWhitespace(Source[FirstChar]); FirstChar++);
 
@@ -251,69 +287,173 @@ GSStringCopyWithoutSurroundingWhitespace(char *Source, char *Dest, unsigned int 
                 Dest[Count] = Source[S];
         }
 
-        return(Count);
-}
-
-unsigned int /* Returns number of bytes copied. */
-GSStringCopyWithoutSurroundingWhitespaceWithNull(char *Source, char *Dest, unsigned int MaxLength)
-{
-        int FirstChar, LastChar;
-        for(FirstChar = 0; GSCharIsWhitespace(Source[FirstChar]); FirstChar++);
-
-        int StringLength = GSStringLength(Source);
-        for(LastChar = StringLength - 1; GSCharIsWhitespace(Source[LastChar]); LastChar--);
-
-        int Count = 0;
-        for(int S=FirstChar; S<=LastChar && Count < MaxLength; Count++, S++)
+        for(int I=0; I<Count; I++)
         {
-                Dest[Count] = Source[S];
+                Source[I] = Dest[I];
         }
-        Dest[Count] = '\0';
+        Source[Count] = GSNullChar;
 
         return(Count);
 }
 
 /*
-  eg.: hellOTherE -> Hellothere, my_friend -> MyFriend. Strips out
-  non-alphanumeric chars.
+  For any ascii character following an underscore, remove the underscore
+  and capitalize the ascii char.
+  This function assumes a maximum string size of 512 bytes.
+  The first character is capitalized.
 */
-void
-GSStringCapitalize(char *Source, char *Dest, unsigned int SourceLength)
+unsigned int
+GSStringSnakeCaseToCamelCase(char *Source, unsigned int SourceLength)
 {
+        char Dest[512]; /* Scratch buffer. */
+        int Si = 0, Di = 0; /* Iterable indices for Source and Dest. */
+
+        if((Source[Si] == '_') &&
+           (Si+1 < SourceLength) &&
+           GSCharIsAlphabetical(Source[Si+1]))
+        {
+                Si++;
+        }
+        Dest[Di] = GSCharUpcase(Source[Si]);
+        Si++;
+        Di++;
+
+        SourceLength = GSMin(512, SourceLength);
+
+        for(Si, Di; Si<SourceLength; Si++, Di++)
+        {
+                /* Replace any '_*' with 'upcase(*)' where * is an ascii char. */
+                if((Source[Si] == '_') &&
+                   (Si+1 < SourceLength) &&
+                   GSCharIsAlphabetical(Source[Si+1]))
+                {
+                        Dest[Di] = GSCharUpcase(Source[Si+1]);
+                        Si++;
+                }
+                /* Copy chars normally. */
+                else
+                {
+                        Dest[Di] = Source[Si];
+                }
+        }
+
+        /* Write the modified string back to source. */
+        for(int I=0; I<Di; I++)
+        {
+                Source[I] = Dest[I];
+        }
+        Source[Di] = GSNullChar;
+
+        return(Di);
+}
+
+/*
+  Prerequisites:
+  - Dest must be large enough to contain the modified string.
+
+  For any Capitalized ascii character, replace with an underscore followed by
+  the lowercase version of that character. This does not apply to leading char.
+  eg.: CamelCase -> Camel_case
+*/
+unsigned int
+GSStringCamelCaseToSnakeCase(char *Source, char *Dest, unsigned int SourceLength)
+{
+        int Si = 0, Di = 0; /* Iterable indices for Source and Dest. */
+        Dest[Si] = GSCharDowncase(Source[Si]);
+        Si++;
+        Di++;
+
+        for(Si, Di; Si<SourceLength && Source[Si] != GSNullChar; Si++, Di++)
+        {
+                /* Replace upcase ascii char with '_' and downcase ascii char. */
+                if(GSCharIsUpcase(Source[Si]))
+                {
+                        Dest[Di] = '_';
+                        Di++;
+                        Dest[Di] = GSCharDowncase(Source[Si]);
+                }
+                /* Copy chars normally. */
+                else
+                {
+                        Dest[Di] = Source[Si];
+                }
+        }
+        Dest[Di] = GSNullChar;
+
+        return(Di);
+}
+
+/*
+  Capitalizes the first character found.
+  Modifies Source in-place.
+  Returns Source.
+  eg.: hello -> Hello
+       123foos -> 123Foos
+*/
+char *
+GSStringCapitalize(char *Source, unsigned int Length)
+{
+        int Index = 0;
+
         while(true)
         {
-                if(GSCharIsAlphanumeric(*Source))
+                if(Index >= Length)
                         break;
-
-                Source++;
-                SourceLength--;
+                if(Source[Index] == GSNullChar)
+                        break;
+                if(GSCharIsAlphabetical(Source[Index]))
+                        break;
+                Index++;
         }
 
-        *Dest = GSCharUpcase(*Source);
-        Dest++;
+        if(Index >= Length)
+                return(Source);
 
-        gs_bool UpcaseNextChar = false;
-        for(int I=1; I<SourceLength; I++)
-        {
-                if('_' == Source[I])
+        Source[Index] = GSCharUpcase(Source[Index]);
+
+        return(Source);
+}
+
+typedef gs_bool (*GSStringFilterFn)(char C);
+
+int /* Returns length of new string */
+GSStringKeep(char *Source, char *Dest, unsigned int MaxLength, GSStringFilterFn FilterFn)
+{
+        int SourceIndex = 0;
+        int DestIndex = 0;
+
+	while(SourceIndex < MaxLength)
+	{
+                if(FilterFn(Source[SourceIndex]))
                 {
-                        UpcaseNextChar = true;
+                        Dest[DestIndex] = Source[SourceIndex];
+                        DestIndex++;
                 }
-                else if(GSCharIsAlphanumeric(Source[I]))
-                {
-                        if(UpcaseNextChar)
-                        {
-                                UpcaseNextChar = false;
-                                *Dest = GSCharUpcase(Source[I]);
-                                Dest++;
-                        }
-                        else
-                        {
-                                *Dest = GSCharDowncase(Source[I]);
-                                Dest++;
-                        }
-                }
+                SourceIndex++;
         }
+        Dest[DestIndex] = GSNullChar;
+
+        return(DestIndex + 1);
+}
+
+int /* Returns length of new string */
+GSStringReject(char *Source, char *Dest, unsigned int MaxLength, GSStringFilterFn FilterFn)
+{
+        int SourceIndex = 0;
+        int DestIndex = 0;
+
+	while(SourceIndex < MaxLength)
+	{
+                if(!FilterFn(Source[SourceIndex]))
+                {
+                        Dest[DestIndex] = Source[SourceIndex];
+                        DestIndex++;
+                }
+                SourceIndex++;
+        }
+        Dest[DestIndex] = GSNullChar;
+
+        return(DestIndex + 1);
 }
 
 /******************************************************************************
@@ -322,117 +462,272 @@ GSStringCapitalize(char *Source, char *Dest, unsigned int SourceLength)
  *
  * Usage:
  *     char *Value = "value";
- *     char *Result = NULL;
- *     gs_bool Found = false;
- *     gs_hash_map Map = GSHashMapCreate();
- *     GSHashMapAdd(&Map, "key", (void *)Value);
- *     Found = GSHashMapGet(&Map, "key", (void *)Result);
- *     if(Found) printf("Result: %s\n", Result);
- *
+ *     int StringLength = 256;
+ *     int NumElements = 13;
+ *     size_t BytesRequired = GSHashMapAllocSize(StringLength, NumElements);
+ *     gs_hash_map *Map = GSHashMapInit(alloca(BytesRequired), StringLength, NumElements);
+ *     GSHashMapSet(Map, "key", Value);
+ *     if(GSHashMapHasKey(Map, "key"))
+ *     {
+ *         char *Result = (char *)GSHashMapGet(Map, "key");
+ *         printf("Key(%s), Value(%s)\n", "key", Result);
+ *     }
  ******************************************************************************/
+typedef struct gs_hash_map
+{
+        unsigned int Count;
+        size_t AllocatedBytes;
+        unsigned int Capacity;
+        unsigned int MaxKeyLength;
 
-#define GSHashMapInitialSize 50
-
-typedef struct gs_hash_map {
-        int Count;
-        int Size;
-        int *Keys;
-        void *(*Values);
+        char *Keys;
+        void **Values;
 } gs_hash_map;
 
-int
-__GSHashMapCompute(char *Key)
+unsigned int /* String must be a NULL-terminated string */
+__GSHashMapComputeHash(gs_hash_map *Self, char *String)
 {
         /*
           sdbm hash function: http://stackoverflow.com/a/14409947
         */
-        int HashAddress = 0;
-        for(int Counter = 0; Key[Counter] != '\0'; Counter++)
+        unsigned int HashAddress = 0;
+        for(unsigned int Counter = 0; String[Counter] != GSNullChar; Counter++)
         {
-                HashAddress = Key[Counter] +
+                HashAddress = String[Counter] +
                         (HashAddress << 6) +
                         (HashAddress << 16) -
                         HashAddress;
         }
-        return(HashAddress);
+        unsigned int Result = HashAddress % Self->Capacity;
+        return(Result);
 }
 
 size_t
-GSHashMapSpaceRequired(int NumKeys)
+GSHashMapAllocSize(unsigned int MaxKeyLength, unsigned int NumEntries)
 {
-        if(NumKeys == -1)
-        {
-                NumKeys = GSHashMapInitialSize;
-        }
-
-        int SizeOfKeys = sizeof(int) * NumKeys;
-        int SizeOfValues = sizeof(void *) * NumKeys;
-        int SizeToAlloc = SizeOfKeys + SizeOfValues + sizeof(gs_hash_map);
-        return(SizeToAlloc);
+        int AllocSize =
+                sizeof(gs_hash_map) +
+                (sizeof(char) * MaxKeyLength * NumEntries) +
+                (sizeof(void *) * NumEntries);
 }
 
 gs_hash_map *
-__GSHashMapAlloc(int NumKeys, void *Memory)
+GSHashMapInit(void *Memory, unsigned int MaxKeyLength, unsigned int NumEntries)
 {
-        gs_hash_map *NewHash;
+        gs_hash_map *Self = (gs_hash_map *)Memory;
 
-        if(NumKeys == -1)
+        char *KeyValueMemory = (char *)Memory + sizeof(gs_hash_map);
+
+        Self->MaxKeyLength = MaxKeyLength;
+        Self->Capacity = NumEntries;
+        Self->AllocatedBytes = GSHashMapAllocSize(MaxKeyLength, NumEntries);
+        Self->Count = 0;
+
+        int KeysMemLength = MaxKeyLength * NumEntries;
+
+        Self->Keys = KeyValueMemory;
+        memset(Self->Keys, 0, KeysMemLength);
+
+        Self->Values = (void **)(Self->Keys + KeysMemLength);
+        memset(Self->Values, 0, (sizeof(void **) * NumEntries));
+
+        return(Self);
+}
+
+gs_bool
+__GSHashMapUpdate(gs_hash_map *Self, char *Key, void *Value)
+{
+        unsigned int KeyLength = GSStringLength(Key);
+        unsigned int HashIndex = __GSHashMapComputeHash(Self, Key);
+
+        unsigned int StartHash = HashIndex;
+
+        do
         {
-                NumKeys = GSHashMapInitialSize;
+                if(GSStringIsEqual(&Self->Keys[HashIndex * Self->MaxKeyLength],
+                                   Key,
+                                   GSStringLength(Key)))
+                {
+                        Self->Values[HashIndex] = Value;
+                        return(true);
+                }
+                HashIndex = (HashIndex + 1) % Self->Capacity;
+        }
+        while(HashIndex != StartHash);
+
+        /* Couldn't find Key to update. */
+        return(false);
+}
+
+gs_bool /* Wanted must be a NULL terminated string */
+GSHashMapHasKey(gs_hash_map *Self, char *Wanted)
+{
+        unsigned int HashIndex = __GSHashMapComputeHash(Self, Wanted);
+        char *Key = &Self->Keys[HashIndex * Self->MaxKeyLength];
+        if(GSStringIsEqual(Wanted, Key, GSStringLength(Wanted)))
+        {
+                return(true);
         }
 
-        int SizeToAlloc = GSHashMapSpaceRequired(NumKeys);
-        int SizeOfKeys = sizeof(int) * NumKeys;
+        unsigned int StartHash = HashIndex;
+        HashIndex = (HashIndex + 1) % Self->Capacity;
 
-        if(Memory == NULL)
+        while(true)
         {
-                NewHash = (gs_hash_map*)calloc(1, SizeToAlloc);
-        }
-        else
-        {
-                NewHash = (gs_hash_map*)Memory;
-                memset((void *)NewHash, 0, sizeof(SizeToAlloc));
+                if(HashIndex == StartHash) break;
+
+                Key = &Self->Keys[HashIndex * Self->MaxKeyLength];
+                if(GSStringIsEqual(Wanted, Key, GSStringLength(Wanted)))
+                {
+                        return(true);
+                }
+                HashIndex = (HashIndex + 1) % Self->Capacity;
         }
 
-        NewHash->Keys = (int *)((char *)NewHash + sizeof(gs_hash_map));
-        NewHash->Values = (void *)((char *)NewHash + sizeof(gs_hash_map) + SizeOfKeys);
-        NewHash->Size = NumKeys;
-
-        return(NewHash);
+        return(false);
 }
 
 /*
-  NumKeys: Number of initial key/value pairs expected. Specify -1 to use default.
-  Memory:  Memory buffer to place HashMap into. Specify NULL to use malloc.
-*/
-gs_hash_map *
-GSHashMapCreate(int NumKeys, void *Memory) {
-        gs_hash_map *NewHash = __GSHashMapAlloc(NumKeys, Memory);
-        return(NewHash);
+  Input: Key as string
+  Computation: Hash key value into an integer.
+  Algorithm: Open-addressing hash. Easy to predict space usage.
+             See: https://en.wikipedia.org/wiki/Open_addressing
+  Key must be a NULL terminated string.
+ */
+gs_bool
+GSHashMapSet(gs_hash_map *Self, char *Key, void *Value)
+{
+        unsigned int KeyLength = GSStringLength(Key);
+        unsigned int HashIndex = __GSHashMapComputeHash(Self, Key);
+
+        if(GSHashMapHasKey(Self, Key))
+        {
+                return __GSHashMapUpdate(Self, Key, Value);
+        }
+
+        /* We're not updating, so return false if we're at capacity. */
+        if(Self->Count >= Self->Capacity) return(false);
+
+        /* Add a brand-new key in. */
+        if(Self->Keys[HashIndex * Self->MaxKeyLength] == GSNullChar)
+        {
+                GSStringCopy(Key, &Self->Keys[HashIndex * Self->MaxKeyLength], KeyLength);
+                Self->Values[HashIndex] = Value;
+                Self->Count++;
+                return(true);
+        }
+
+        /* We have a collision! Find a free index. */
+        unsigned int StartHash = HashIndex;
+        HashIndex = (HashIndex + 1) % Self->Capacity;
+
+        while(true)
+        {
+                if(HashIndex == StartHash) break;
+
+                if(Self->Keys[HashIndex * Self->MaxKeyLength] == GSNullChar)
+                {
+                        GSStringCopy(Key, &Self->Keys[HashIndex * Self->MaxKeyLength], KeyLength);
+                        Self->Values[HashIndex] = Value;
+                        Self->Count++;
+                        return(true);
+                }
+                HashIndex = (HashIndex + 1) % Self->Capacity;
+        }
+
+        /* Couldn't find any free space. */
+        return(false);
 }
 
-gs_bool
-GSHashMapAdd(gs_hash_map *Hash, char *Key, void *Value) {
-        if(Hash->Size == Hash->Count) return false;
+gs_bool /* Memory must be large enough for the resized Hash. Memory _cannot_ overlap! */
+GSHashMapGrow(gs_hash_map **Self, unsigned int NumEntries, void *New)
+{
+        gs_hash_map *Old = *Self;
 
-        int IntKey = __GSHashMapCompute(Key);
-        Hash->Keys[Hash->Count] = IntKey;
-        Hash->Values[Hash->Count++] = Value;
+        /* No point in making smaller... */
+        if(NumEntries <= Old->Capacity) return(false);
+        if(New == NULL) return(false);
+
+        *Self = GSHashMapInit(New, Old->MaxKeyLength, NumEntries);
+        for(int I=0; I<Old->Capacity; I++)
+        {
+                char *Key = &Old->Keys[I * Old->MaxKeyLength];
+                char *Value = (char *)(Old->Values[I]);
+                if(Key != NULL)
+                {
+                        gs_bool Success = GSHashMapSet(*Self, Key, Value);
+                        if(!Success)
+                                GSAbortWithMessage("This should have worked!\n");
+                }
+        }
+
         return(true);
 }
 
-gs_bool
-GSHashMapGet(gs_hash_map *Hash, char *Key, void **Value) {
-        int IntKey = __GSHashMapCompute(Key);
-        for(int i = 0; i < Hash->Count; ++i)
+void * /* Wanted must be a NULL terminated string */
+GSHashMapGet(gs_hash_map *Self, char *Wanted)
+{
+        unsigned int HashIndex = __GSHashMapComputeHash(Self, Wanted);
+        char *Key = &Self->Keys[HashIndex * Self->MaxKeyLength];
+        if(GSStringIsEqual(Wanted, Key, GSStringLength(Key)))
         {
-                if(Hash->Keys[i] == IntKey)
-                {
-                        *Value = Hash->Values[i];
-                        return true;
-                }
+                void *Result = Self->Values[HashIndex];
+                return(Result);
         }
-        return(false);
+
+        unsigned int StartHash = HashIndex;
+        HashIndex = (HashIndex + 1) % Self->Capacity;
+
+        while(true)
+        {
+                if(HashIndex == StartHash) break;
+
+                Key = &Self->Keys[HashIndex * Self->MaxKeyLength];
+                if(GSStringIsEqual(Wanted, Key, GSStringLength(Key)))
+                {
+                        void *Result = Self->Values[HashIndex];
+                        return(Result);
+                }
+                HashIndex = (HashIndex + 1) % Self->Capacity;
+        }
+
+        return(NULL);
+}
+
+void * /* Wanted must be a NULL terminated string */
+GSHashMapDelete(gs_hash_map *Self, char *Wanted)
+{
+        unsigned int HashIndex = __GSHashMapComputeHash(Self, Wanted);
+        char *Key = &Self->Keys[HashIndex * Self->MaxKeyLength];
+        if(GSStringIsEqual(Wanted, Key, GSStringLength(Key)))
+        {
+                void *Result = Self->Values[HashIndex];
+                Self->Values[HashIndex] = NULL;
+                Self->Keys[HashIndex * Self->MaxKeyLength] = GSNullChar;
+                Self->Count--;
+                return(Result);
+        }
+
+        unsigned int StartHash = HashIndex;
+        HashIndex = (HashIndex + 1) % Self->Capacity;
+
+        while(true)
+        {
+                if(HashIndex == StartHash) break;
+
+                Key = &Self->Keys[HashIndex * Self->MaxKeyLength];
+                if(GSStringIsEqual(Wanted, Key, GSStringLength(Key)))
+                {
+                        void *Result = Self->Values[HashIndex];
+                        Self->Values[HashIndex] = NULL;
+                        Self->Keys[HashIndex * Self->MaxKeyLength] = GSNullChar;
+                        Self->Count--;
+                        return(Result);
+                }
+                HashIndex = (HashIndex + 1) % Self->Capacity;
+        }
+
+        return(NULL);
 }
 
 /******************************************************************************
@@ -445,21 +740,32 @@ typedef struct gs_args
         char **Args;
 } gs_args;
 
-void
-GSArgInit(gs_args *Self, int ArgCount, char **Args)
+unsigned int
+GSArgsAllocSize(void)
 {
+        unsigned int Result = sizeof(gs_args);
+        return(Result);
+}
+
+gs_args *
+GSArgsInit(void *Memory, int ArgCount, char **Args)
+{
+        gs_args *Self = (gs_args *)Memory;
         Self->Count = ArgCount;
         Self->Args = Args;
+        return(Self);
 }
 
 char *
-GSArgProgramName(gs_args *Self)
+GSArgsProgramName(gs_args *Self)
 {
-        return(Self->Args[0]);
+        char *ProgramName = Self->Args[0];
+        char *Result = basename(ProgramName);
+        return(Result);
 }
 
 gs_bool
-GSArgIsPresent(gs_args *Args, char *Wanted)
+GSArgsIsPresent(gs_args *Args, char *Wanted)
 {
         int StringLength = GSStringLength(Wanted);
         for(int I=0; I<Args->Count; I++)
@@ -473,7 +779,7 @@ GSArgIsPresent(gs_args *Args, char *Wanted)
 }
 
 int /* Returns -1 if Arg not found. */
-GSArgIndex(gs_args *Args, char *Wanted)
+GSArgsFind(gs_args *Args, char *Wanted)
 {
         int StringLength = GSStringLength(Wanted);
         for(int I=0; I<Args->Count; I++)
@@ -487,7 +793,7 @@ GSArgIndex(gs_args *Args, char *Wanted)
 }
 
 char * /* Returns NULL if Index is invalid. */
-GSArgAtIndex(gs_args *Args, int Index)
+GSArgsAtIndex(gs_args *Args, int Index)
 {
         if((Index < 0) ||
            (Index > (Args->Count - 1)))
@@ -497,20 +803,20 @@ GSArgAtIndex(gs_args *Args, int Index)
 }
 
 char * /* Returns NULL if Marker is not found or no trailing arg. */
-GSArgAfter(gs_args *Args, char *Marker)
+GSArgsAfter(gs_args *Args, char *Marker)
 {
-        int Index = GSArgIndex(Args, Marker);
+        int Index = GSArgsFind(Args, Marker);
         if(Index < 0) return(NULL);
 
-        char *Arg = GSArgAtIndex(Args, Index + 1);
+        char *Arg = GSArgsAtIndex(Args, Index + 1);
         return(Arg);
 }
 
 gs_bool
-GSArgHelpWanted(gs_args *Args)
+GSArgsHelpWanted(gs_args *Args)
 {
-        if(GSArgIsPresent(Args, "-h") ||
-           GSArgIsPresent(Args, "--help"))
+        if(GSArgsIsPresent(Args, "-h") ||
+           GSArgsIsPresent(Args, "--help"))
                 return(true);
         else
                 return(false);
@@ -613,3 +919,5 @@ GSFileCopyToBuffer(char *FileName, gs_buffer *Buffer)
 
         return(true);
 }
+
+#endif /* GS_VERSION */

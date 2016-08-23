@@ -6,3 +6,4 @@ env/
 !env/.emacs
 *~
 gscfg
+settings.c

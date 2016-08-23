@@ -1,6 +1,7 @@
 --------------------------------------------------------------------------------
  Introduction
 --------------------------------------------------------------------------------
+
 This is my configuration file preprocessor.
 It reads a yaml-esque human-readable configuration file and outputs C code that
 you `#include' into your C program.
@@ -89,3 +90,13 @@ almost-there libraries that might work for you:
     actually read data from my config file as expected. Probably user error.
     It also does dynamic allocations with malloc and is in a very early
     pre-alpha state.
+
+--------------------------------------------------------------------------------
+ License
+--------------------------------------------------------------------------------
+
+See LICENSE.
+Terms of license copied from Handmade Hero.
+These may change in the future.
+Note: Much of my code is comes from work I do in my `practice' code repo, and
+all of that code is CC BY 4.0.

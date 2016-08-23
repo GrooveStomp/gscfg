@@ -1,7 +1,7 @@
 /******************************************************************************
  * File: main.c
  * Created: 2016-08-09
- * Last Updated: 2016-08-18
+ * Last Updated: 2016-08-23
  * Creator: Aaron Oman (a.k.a GrooveStomp)
  * Notice: (C) Copyright 2016 by Aaron Oman
  *-----------------------------------------------------------------------------
@@ -11,6 +11,9 @@
  * and initializer.
  *
  ******************************************************************************/
+#ifndef GS_CFG_VERSION
+#define GS_CFG_VERSION 0.1.0
+
 #include <alloca.h>
 #include <stdio.h>
 #include <stdlib.h> /* EXIT_SUCCESS */
@@ -124,7 +127,7 @@ ConfigStackAdd(config_stack *Self, char *Name, unsigned int Indentation)
 {
         if(Self->Count == 0)
         {
-                GSStringCopyWithNull(Name, &Self->Names[0], GSStringLength(Name));
+                GSStringCopy(Name, &Self->Names[0], GSStringLength(Name));
                 Self->NameOffsets[0] = 0;
                 Self->Count = 1;
                 Self->NextNameOffset = GSStringLength(Name) + 1;
@@ -139,7 +142,7 @@ ConfigStackAdd(config_stack *Self, char *Name, unsigned int Indentation)
                         return(false);
                 }
 
-                GSStringCopyWithNull(Name, &Self->Names[Self->NextNameOffset], GSStringLength(Name));
+                GSStringCopy(Name, &Self->Names[Self->NextNameOffset], GSStringLength(Name));
                 Self->NameOffsets[Self->Count] = Self->NextNameOffset;
                 Self->Indentation[Self->Count] = Indentation;
                 Self->Count++;
@@ -221,7 +224,8 @@ PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
                 {
                         char ModifiedStructName[MaxStringLength];
                         memset(ModifiedStructName, 0, MaxStringLength);
-                        GSStringCapitalize(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        GSStringCopy(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        GSStringSnakeCaseToCamelCase(ModifiedStructName, GSStringLength(ModifiedStructName));
                         fprintf(Init, "%sInit(%s *Self)\n", ModifiedStructName, GConfig.StructName);
                 } break;
                 default:
@@ -247,7 +251,8 @@ PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
                 {
                         char ModifiedStructName[MaxStringLength];
                         memset(ModifiedStructName, 0, MaxStringLength);
-                        GSStringCapitalize(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        GSStringCopy(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        GSStringSnakeCaseToCamelCase(ModifiedStructName, GSStringLength(ModifiedStructName));
                         fprintf(Query, "%sHasKey(%s *Self, char *String)\n", ModifiedStructName, GConfig.StructName);
                 } break;
                 default:
@@ -273,7 +278,8 @@ PrintFunctionIntros(FILE *Define, FILE *Init, FILE *Query, FILE *Get)
                 {
                         char ModifiedStructName[MaxStringLength];
                         memset(ModifiedStructName, 0, MaxStringLength);
-                        GSStringCapitalize(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        GSStringCopy(GConfig.StructName, ModifiedStructName, GSStringLength(GConfig.StructName));
+                        GSStringSnakeCaseToCamelCase(ModifiedStructName, GSStringLength(ModifiedStructName));
                         fprintf(Get, "%sGet(%s *Self, char *String)\n", ModifiedStructName, GConfig.StructName);
                 } break;
                 default:
@@ -395,15 +401,16 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
 
                 int Length = Newline - Buffer->Cursor;
                 char *StringDup = (char *)alloca(Length + 1);
-                GSStringCopyWithNull(Buffer->Cursor, StringDup, Length);
+                GSStringCopy(Buffer->Cursor, StringDup, Length);
                 Key = strtok(StringDup, ":\n");
                 Value = strtok(NULL, "\n");
 
                 unsigned int StringLength;
                 memset(Temp, 0, MaxStringLength);
                 StringLength = GSMin(GSStringLength(Key), MaxStringLength);
-                StringLength = GSStringCopyWithoutSurroundingWhitespaceWithNull(Key, Temp, StringLength);
-                GSStringCopyWithNull(Temp, Key, StringLength);
+                GSStringCopy(Key, Temp, StringLength);
+                GSStringTrimWhitespace(Temp, GSStringLength(Temp));
+                GSStringCopy(Temp, Key, StringLength);
 
                 int NumSpaces;
                 char Indent[MaxStringLength];
@@ -439,8 +446,9 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                 fprintf(StructDefine, "%s%schar *%s;\n", IndentString, Indent, Key);
                 memset(Temp, 0, MaxStringLength);
                 StringLength = GSMin(GSStringLength(Value), MaxStringLength);
-                StringLength = GSStringCopyWithoutSurroundingWhitespace(Value, Temp, StringLength);
-                GSStringCopyWithNull(Temp, Value, StringLength);
+                GSStringCopy(Value, Temp, StringLength);
+                GSStringTrimWhitespace(Temp, GSStringLength(Temp));
+                GSStringCopy(Temp, Value, StringLength);
 
                 char CompoundName[MaxStringLength];
                 char *CompoundNamePtr = CompoundName;
@@ -454,7 +462,7 @@ GenerateSourceFile(gs_buffer *Buffer, char *ConfigFileBaseName)
                                 CompoundNamePtr = CompoundNamePtr + StringLength + 1;
                         }
                 }
-                GSStringCopyWithNull(Key, CompoundNamePtr, GSStringLength(Key));
+                GSStringCopy(Key, CompoundNamePtr, GSStringLength(Key));
                 PrintFunctionSource(StructInit, StructQuery, StructGet, CompoundName, Value);
                 GSBufferNextLine(Buffer);
         }
@@ -530,12 +538,12 @@ Usage(char *ProgramName)
 int
 main(int ArgCount, char **Arguments)
 {
-        gs_args Args;
-        GSArgInit(&Args, ArgCount, Arguments);
-        if(GSArgHelpWanted(&Args) || ArgCount == 1) Usage(GSArgProgramName(&Args));
+        gs_args *Args;
+        Args = GSArgsInit(alloca(GSArgsAllocSize()), ArgCount, Arguments);
+        if(GSArgsHelpWanted(Args) || ArgCount == 1) Usage(GSArgsProgramName(Args));
 
         char ConfigCFile[MaxStringLength];
-        char *ConfigFile = GSArgAtIndex(&Args, 1);
+        char *ConfigFile = GSArgsAtIndex(Args, 1);
         int StringLength = GSStringLength(ConfigFile);
         char *ExtensionStart = strchr(ConfigFile, '.');
         if(ExtensionStart != NULL)
@@ -545,9 +553,9 @@ main(int ArgCount, char **Arguments)
         sprintf(ConfigCFile, "%.*s", StringLength, ConfigFile);
 
         char *StructName;
-        if(GSArgIsPresent(&Args, "--struct-name"))
+        if(GSArgsIsPresent(Args, "--struct-name"))
         {
-                GConfig.StructName = GSArgAfter(&Args, "--struct-name");
+                GConfig.StructName = GSArgsAfter(Args, "--struct-name");
         }
         else
         {
@@ -556,9 +564,9 @@ main(int ArgCount, char **Arguments)
         }
 
         GConfig.SourceStyle = SOURCE_STYLE_C;
-        if(GSArgIsPresent(&Args, "--style"))
+        if(GSArgsIsPresent(Args, "--style"))
         {
-                char *StyleString = GSArgAfter(&Args, "--style");
+                char *StyleString = GSArgsAfter(Args, "--style");
                 if(GSStringIsEqual("CamelCase", StyleString, GSStringLength("CamelCase")))
                 {
                         GConfig.SourceStyle = SOURCE_STYLE_CAMELCASE;
@@ -573,9 +581,9 @@ main(int ArgCount, char **Arguments)
                 }
         }
 
-        if(GSArgIsPresent(&Args, "--indent"))
+        if(GSArgsIsPresent(Args, "--indent"))
         {
-                char *Indent = GSArgAfter(&Args, "--indent");
+                char *Indent = GSArgsAfter(Args, "--indent");
                 GConfig.Indent = strtol(Indent, NULL, 10);
         }
         else
@@ -595,3 +603,5 @@ main(int ArgCount, char **Arguments)
 
         return(EXIT_SUCCESS);
 }
+
+#endif /* GS_CFG_VERSION */
